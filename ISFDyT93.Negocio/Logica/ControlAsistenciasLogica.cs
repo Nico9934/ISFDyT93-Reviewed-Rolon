@@ -127,6 +127,12 @@ namespace ISFDyT93.Negocio.Logica
 		{
 			return controlAsistenciasDao.HistorialAsistenciasAlumnos(modelo);
 		}
+
+		// En ControlAsistenciasLogica.cs
+		public DataTable ObtenerCursadasCuenta(int cursadaId)
+		{
+			return controlAsistenciasDao.ObtenerCursadasCuenta(cursadaId);
+		}
 	}
 }
 

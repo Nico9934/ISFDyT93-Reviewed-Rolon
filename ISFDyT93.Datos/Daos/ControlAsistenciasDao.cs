@@ -114,6 +114,24 @@ namespace ISFDyT93.Datos.Daos
 			return this.Conexion.ObtenerRegistro(query);
 		}
 
+		// En ControlAsistenciasDao.cs
+		// ✅ Devuelve los datos ya almacenados en la tabla Cursadas (sin ejecutar SP)
+		public DataTable ObtenerCursadasCuenta(int cursadaId)
+		{
+			string query = $@"
+        SELECT 
+            CantidadAlumnos        AS [Cant/Alumnos],
+            CantidadAlumnosRecursantes AS [Cant/Recur.],
+            CantidadAlumnosDesertores  AS [Cant/Desertores],
+            HoraCatedra            AS [H/Cátedra],
+            FechaAsistencia        AS [Fech/Asistencia],
+            PorcentajeAsistencia   AS [Porcentaje]
+        FROM dbo.Cursadas
+        WHERE CursadaId = {cursadaId};
+    ";
+
+			return this.Conexion.ObtenerRegistros(query);
+		}
 
 
 
@@ -126,7 +144,7 @@ namespace ISFDyT93.Datos.Daos
 		/// </summary>
 		public DataTable CargarAsistenciasPorCursada(int cursadaId)
 		{
-			MessageBox.Show($"[DAO] Entrando en MÉTODO: CargarAsistenciasPorCursada({cursadaId})");
+	
 
 			string query = $@"
 			SELECT 
@@ -143,7 +161,7 @@ namespace ISFDyT93.Datos.Daos
 			WHERE CAC.CursadaId = {cursadaId}
 			ORDER BY AL.Apellido, AL.Nombre;";
 
-			MessageBox.Show($"[DAO DEBUG] QUERY EJECUTADA:\n\n{query}");
+		
 			return this.Conexion.ObtenerRegistros(query);
 		}
 

@@ -194,45 +194,43 @@ namespace ISFDyT93.Vista.Forms.Carreras
 				{
 					FormatearGrillaAsistencias();
 				}
+				// 🧩 Paso 5: Cargar resumen de asistencias (encabezado)
+				// 🧩 Paso 5: Cargar resumen de asistencias (encabezado)
+				//MessageBox.Show($"📌 Debug → Estoy en Paso 5. CursadaId = {CursadaId.Value}");
 
-				// 🧩 Paso 5: Cargar resumen de asistencias
-				var resumen = controlAsistenciasLogica.CargarResumenAsistencias(CursadaId.Value);
+				var dtCuenta = controlAsistenciasLogica.ObtenerCursadasCuenta(CursadaId.Value);
 
-				if (resumen != null)
+
+				dgvAsistenciasCount.DataSource = null;
+				dgvAsistenciasCount.Rows.Clear();
+				dgvAsistenciasCount.AutoGenerateColumns = true; // por si tenés columnas auto
+
+				if (dtCuenta != null && dtCuenta.Rows.Count > 0)
 				{
-					MessageBox.Show(
-						$"📘 Resumen:\n" +
-						$"Total alumnos: {resumen["Cant/Alumnos"]}\n" +
-						$"Porcentaje promedio: {resumen["Porcentaje"]}\n" +
-						$"Horas promedio: {resumen["H/Cátedra"]}",
-						"Depuración - Resumen",
-						MessageBoxButtons.OK,
-						MessageBoxIcon.Information
-					);
+					dgvAsistenciasCount.DataSource = dtCuenta;
 
-					// 🔹 Convertir DataRow a DataTable
-					DataTable tablaResumen = resumen.Table.Clone();  // crea la estructura
-					tablaResumen.ImportRow(resumen);                 // copia el contenido
-
-					dgvAsistenciasCount.DataSource = null;
-					dgvAsistenciasCount.Rows.Clear();
-					dgvAsistenciasCount.DataSource = tablaResumen;
+					// Opcional: forzar encabezados (ya vienen con alias "bonitos")
+					dgvAsistenciasCount.Columns["Cant/Alumnos"].HeaderText = "Cant/Alumnos";
+					dgvAsistenciasCount.Columns["Cant/Recur."].HeaderText = "Cant/Recur.";
+					dgvAsistenciasCount.Columns["Cant/Desertores"].HeaderText = "Cant/Desertores";
+					dgvAsistenciasCount.Columns["H/Cátedra"].HeaderText = "H/Cátedra";
+					dgvAsistenciasCount.Columns["Fech/Asistencia"].HeaderText = "Fech/Asistencia";
+					dgvAsistenciasCount.Columns["Porcentaje"].HeaderText = "% Asistencia";
 				}
 				else
 				{
-					MessageBox.Show(
-						"⚠️ No se pudo generar el resumen de asistencias (devuelve null).",
-						"Depuración - Resumen",
-						MessageBoxButtons.OK,
-						MessageBoxIcon.Warning
-					);
+					// Si no hay fila en Cursadas, mostrás una vacía amable (opcional)
+					DataTable molde = new DataTable();
+					molde.Columns.Add("Cant/Alumnos", typeof(int));
+					molde.Columns.Add("Cant/Recur.", typeof(int));
+					molde.Columns.Add("Cant/Desertores", typeof(int));
+					molde.Columns.Add("H/Cátedra", typeof(int));
+					molde.Columns.Add("Fech/Asistencia", typeof(DateTime));
+					molde.Columns.Add("Porcentaje", typeof(decimal));
+					molde.Rows.Add(0, 0, 0, 0, DBNull.Value, 0m);
+					dgvAsistenciasCount.DataSource = molde;
 				}
-				dgvAsistenciasCount.Columns["Cant/Alumnos"].HeaderText = "Cant/Alumnos";
-				dgvAsistenciasCount.Columns["Cant/Recur."].HeaderText = "Cant/Recur.";
-				dgvAsistenciasCount.Columns["Cant/Desertores"].HeaderText = "Cant/Desert.";
-				dgvAsistenciasCount.Columns["H/Cátedra"].HeaderText = "H/Cátedra";
-				dgvAsistenciasCount.Columns["Fech/Asistencia"].HeaderText = "Últ. Asistencia";
-				dgvAsistenciasCount.Columns["Porcentaje"].HeaderText = "% Asistencia";
+
 
 			}
 			catch (Exception ex)

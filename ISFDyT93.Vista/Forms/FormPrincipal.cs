@@ -136,6 +136,7 @@ namespace ISFDyT93.Vista.Forms
 		{
 			this.ActivarBoton(sender, ThemeColor.GetColor());
 			this.AbrirFormulario<FormControlAsistencias>();
+            this.SetTitulo("Asistencia");
 		}
 		private void btnVolver_Click(object sender, EventArgs e)
         {
