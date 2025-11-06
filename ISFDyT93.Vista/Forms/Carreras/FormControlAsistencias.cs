@@ -4,6 +4,7 @@ using ISFDyT93.Vista.Core;
 using ISFDyT93.Vista.Core.Enums;
 using ISFDyT93.Vista.Forms.Common;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
@@ -24,6 +25,9 @@ namespace ISFDyT93.Vista.Forms.Carreras
 		{
 			InitializeComponent();
 			controlAsistenciasLogica = new ControlAsistenciasLogica();
+			panelAsistencias.Visible = true;
+			panelEvaluaciones.Visible = false;
+		
 		}
 
 		// =====================================================
@@ -116,9 +120,19 @@ namespace ISFDyT93.Vista.Forms.Carreras
 
 		private void cboFiltroCurso_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			if (cboFiltroCurso.SelectedValue == null) return;
-			if (!int.TryParse(cboFiltroCurso.SelectedValue.ToString(), out int idCurso)) return;
+			// ✅ Evita ejecutar mientras el ComboBox se está llenando
+			if (cboFiltroCurso.DataSource == null) return;
 
+			// ✅ Si el valor actual NO es un número, salimos sin error
+			if (cboFiltroCurso.SelectedValue == null ||
+				cboFiltroCurso.SelectedValue is DataRowView)
+				return;
+
+			// ✅ Ahora sí, es un número válido → continuamos
+			if (!int.TryParse(cboFiltroCurso.SelectedValue.ToString(), out int idCurso))
+				return;
+
+			// ✅ Cargar materias normalmente
 			var dtMaterias = controlAsistenciasLogica.CargarMaterias(idCurso);
 			cboFiltroMateria.DataSource = dtMaterias;
 			cboFiltroMateria.DisplayMember = "Nombre";
@@ -131,6 +145,8 @@ namespace ISFDyT93.Vista.Forms.Carreras
 		// =====================================================
 		private void btnFiltrar_Click(object sender, EventArgs e)
 		{
+			panelAsistencias.Visible = true;
+			panelEvaluaciones.Visible = false;
 			try
 			{
 				// 🧠 Paso 1: Validar que los combos tengan valor
@@ -245,6 +261,70 @@ namespace ISFDyT93.Vista.Forms.Carreras
 		}
 
 		// =====================================================
+		// 🔹 BOTÓN EVALUACIONES
+		// =====================================================
+		private void btn_evaluaciones_Click(object sender, EventArgs e)
+		{
+			panelAsistencias.Visible = false;
+			panelEvaluaciones.Visible = true;
+
+			if (CursadaId == null)
+			{
+				MessageBox.Show("Debe seleccionar una cursada primero.");
+				return;
+			}
+
+			// 1️⃣ Traer notas de alumnos (ya ordenadas por Secuencia en SQL)
+			var tablaNotas = controlAsistenciasLogica.ObtenerEvaluacionesCursada(CursadaId.Value);
+
+			// ✅ Eliminar columnas completamente vacías
+			List<string> columnasAEliminar = new List<string>();
+
+			foreach (DataColumn col in tablaNotas.Columns)
+			{
+				if (col.ColumnName == "Nro" || col.ColumnName == "DNI" || col.ColumnName == "Alumno")
+					continue;
+
+				bool todaColumnaVacia = tablaNotas.AsEnumerable()
+					.All(row => row.IsNull(col.ColumnName));
+
+				if (todaColumnaVacia)
+					columnasAEliminar.Add(col.ColumnName);
+			}
+
+			foreach (string col in columnasAEliminar)
+			{
+				tablaNotas.Columns.Remove(col);
+			}
+
+			dgv_evaluaciones.DataSource = tablaNotas;
+			// Cambiar encabezados para que sean más amigables
+			var mapping = new Dictionary<string, string>
+			{
+				{ "TP1", "Trabajo Práctico 1" },
+				{ "TP2", "Trabajo Práctico 2" },
+				{ "PAR", "Parcial 1" },
+				{ "PAR2", "Parcial 2" },
+				{ "REC1", "Recuperatorio 1" },
+				{ "REC2", "Recuperatorio 2" },
+				{ "INF1", "Informe 1" },
+				{ "INF2", "Informe 2" },
+				{ "FIN", "Final" }
+			};
+
+			// Solo renombramos las columnas que existan
+			foreach (DataGridViewColumn col in dgv_evaluaciones.Columns)
+			{
+				if (mapping.ContainsKey(col.Name))
+					col.HeaderText = mapping[col.Name];
+			}
+			// 2️⃣ Totales por examen
+			var tablaTotales = controlAsistenciasLogica.ObtenerTotalesEvaluaciones(CursadaId.Value);
+			dgv_totales.DataSource = tablaTotales;
+		}
+
+
+		// =====================================================
 		// 🔹 FORMATEO DE GRILLA
 		// =====================================================
 		private void FormatearGrillaAsistencias()
@@ -292,6 +372,48 @@ namespace ISFDyT93.Vista.Forms.Carreras
 		{
 			if (filaSeleccionada >= 0)
 				dgvAsistencias.Rows[filaSeleccionada].Cells["Asistencia"].Value = "A";
+		}
+
+		private void cboFiltroMateria_SelectedIndexChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				// ✅ Validación: si falta alguno, no sigo
+				if (cboFiltroCarrera.SelectedValue == null ||
+					cboFiltroAnio.SelectedValue == null ||
+					cboFiltroCurso.SelectedValue == null ||
+					cboFiltroMateria.SelectedValue == null ||
+					cboFiltroAnioLectivo.SelectedValue == null)
+				{
+					return;
+				}
+
+				// ✅ Conversión segura a int — si falla, no sigue
+				if (!int.TryParse(cboFiltroCarrera.SelectedValue.ToString(), out int idCarrera)) return;
+				if (!int.TryParse(cboFiltroAnio.SelectedValue.ToString(), out int anioCarrera)) return;
+				if (!int.TryParse(cboFiltroCurso.SelectedValue.ToString(), out int idCurso)) return;
+				if (!int.TryParse(cboFiltroMateria.SelectedValue.ToString(), out int idMateria)) return;
+				if (!int.TryParse(cboFiltroAnioLectivo.SelectedValue.ToString(), out int anioLectivo)) return;
+
+				// ✅ Hasta acá todo bien: recién acá podrías buscar la cursada si querés
+				var cursada = controlAsistenciasLogica.ObtenerCursada(idCarrera, anioCarrera, idCurso, idMateria, anioLectivo);
+
+				if (cursada != null)
+				{
+					CursadaId = Convert.ToInt32(cursada["CursadaId"]);
+					txb_detalleCursadaId.Text = $"CursadaId = {CursadaId}";
+				}
+				else
+				{
+					CursadaId = null;
+					txb_detalleCursadaId.Text = "❌ No existe cursada para esta materia";
+				}
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show($"Error al detectar la cursada: {ex.Message}");
+				txb_detalleCursadaId.Text = "⚠ Error al buscar cursada";
+			}
 		}
 
 	}

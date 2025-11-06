@@ -1,7 +1,9 @@
-﻿using System.Data;
+﻿using ISFDyT93.Datos.Core;
 using ISFDyT93.Datos.Daos;
 using ISFDyT93.Datos.Modelos;
 using ISFDyT93.Negocio.Core;
+using System.Data;
+using System.Data.SqlClient;
 
 namespace ISFDyT93.Negocio.Logica
 {
@@ -79,6 +81,8 @@ namespace ISFDyT93.Negocio.Logica
 			return controlAsistenciasDao.CargarResumenAsistencias(idCursada);
 		}
 
+	
+
 		// ============================================================
 		// 🔹 MÉTODOS EXISTENTES (SIN CAMBIOS)
 		// ============================================================
@@ -132,6 +136,21 @@ namespace ISFDyT93.Negocio.Logica
 		public DataTable ObtenerCursadasCuenta(int cursadaId)
 		{
 			return controlAsistenciasDao.ObtenerCursadasCuenta(cursadaId);
+		}
+
+
+		// ============================================================
+		// 🔹 METODOS EVALUACIONES
+		// ============================================================
+
+		public DataTable ObtenerEvaluacionesCursada(int cursadaId)
+		{
+			return controlAsistenciasDao.ObtenerEvaluacionesCursada(cursadaId);
+		}
+		// 🔹 Devolver DataTable con totales por examen
+		public DataTable ObtenerTotalesEvaluaciones(int cursadaId)
+		{
+			return controlAsistenciasDao.ObtenerTotalesEvaluaciones(cursadaId);
 		}
 	}
 }
