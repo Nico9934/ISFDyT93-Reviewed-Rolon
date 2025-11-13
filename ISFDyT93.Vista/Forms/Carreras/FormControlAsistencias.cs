@@ -8,6 +8,14 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Windows.Forms;
+using System.Drawing;
+using System;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Windows.Forms;
+
+
 
 namespace ISFDyT93.Vista.Forms.Carreras
 {
@@ -263,6 +271,7 @@ namespace ISFDyT93.Vista.Forms.Carreras
 		// =====================================================
 		// 🔹 BOTÓN EVALUACIONES
 		// =====================================================
+
 		private void btn_evaluaciones_Click(object sender, EventArgs e)
 		{
 			panelAsistencias.Visible = false;
@@ -274,55 +283,240 @@ namespace ISFDyT93.Vista.Forms.Carreras
 				return;
 			}
 
-			// 1️⃣ Traer notas de alumnos (ya ordenadas por Secuencia en SQL)
-			var tablaNotas = controlAsistenciasLogica.ObtenerEvaluacionesCursada(CursadaId.Value);
+			// 1️⃣ Traer notas
+			var tabla = controlAsistenciasLogica.ObtenerEvaluacionesCursada(CursadaId.Value);
+			dgv_evaluaciones.DataSource = tabla;
 
-			// ✅ Eliminar columnas completamente vacías
-			List<string> columnasAEliminar = new List<string>();
+			// 2️⃣ Mostrar únicamente estas columnas
+			string[] columnasVisibles = { "Nro", "DNI", "Alumno", "Condición", "REC1", "INF1", "REC2", "INF2", "APromocion", "AFinal", "Recursa", "Observaciones" };
 
-			foreach (DataColumn col in tablaNotas.Columns)
-			{
-				if (col.ColumnName == "Nro" || col.ColumnName == "DNI" || col.ColumnName == "Alumno")
-					continue;
-
-				bool todaColumnaVacia = tablaNotas.AsEnumerable()
-					.All(row => row.IsNull(col.ColumnName));
-
-				if (todaColumnaVacia)
-					columnasAEliminar.Add(col.ColumnName);
-			}
-
-			foreach (string col in columnasAEliminar)
-			{
-				tablaNotas.Columns.Remove(col);
-			}
-
-			dgv_evaluaciones.DataSource = tablaNotas;
-			// Cambiar encabezados para que sean más amigables
-			var mapping = new Dictionary<string, string>
-			{
-				{ "TP1", "Trabajo Práctico 1" },
-				{ "TP2", "Trabajo Práctico 2" },
-				{ "PAR", "Parcial 1" },
-				{ "PAR2", "Parcial 2" },
-				{ "REC1", "Recuperatorio 1" },
-				{ "REC2", "Recuperatorio 2" },
-				{ "INF1", "Informe 1" },
-				{ "INF2", "Informe 2" },
-				{ "FIN", "Final" }
-			};
-
-			// Solo renombramos las columnas que existan
 			foreach (DataGridViewColumn col in dgv_evaluaciones.Columns)
-			{
-				if (mapping.ContainsKey(col.Name))
-					col.HeaderText = mapping[col.Name];
-			}
-			// 2️⃣ Totales por examen
+				col.Visible = columnasVisibles.Contains(col.Name);
+
+			// 3️⃣ Congelar primeras columnas + ajuste de ancho automático
+			dgv_evaluaciones.Columns["Nro"].Frozen = true;
+			dgv_evaluaciones.Columns["DNI"].Frozen = true;
+			dgv_evaluaciones.Columns["Alumno"].Frozen = true;
+
+			dgv_evaluaciones.Columns["Nro"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["DNI"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["Alumno"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["APromocion"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["AFinal"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["AFinal"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["Recursa"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			dgv_evaluaciones.Columns["Observaciones"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+
+			// 4️⃣ Ajustar ancho automático también para notas (NO fijo en 60)
+			foreach (var name in new[] {"Condición","REC1", "INF1", "REC2", "INF2" })
+				if (dgv_evaluaciones.Columns.Contains(name))
+					dgv_evaluaciones.Columns[name].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+
+			// 5️⃣ Estética general de headers
+			dgv_evaluaciones.EnableHeadersVisualStyles = false;
+			dgv_evaluaciones.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(2, 28, 71); // azul
+			dgv_evaluaciones.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;              // texto blanco
+			dgv_evaluaciones.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+			dgv_evaluaciones.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+
+			// 6️⃣ Altura suficiente para columnas rotadas
+			dgv_evaluaciones.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
+			dgv_evaluaciones.ColumnHeadersHeight = 65;
+
+			// 7️⃣ Bordes tipo Excel
+			dgv_evaluaciones.GridColor = Color.Black;
+			dgv_evaluaciones.CellBorderStyle = DataGridViewCellBorderStyle.Single;
+
+			// 8️⃣ Reemplazar nulos por “-”
+			foreach (DataGridViewRow row in dgv_evaluaciones.Rows)
+				foreach (DataGridViewCell cell in row.Cells)
+					if (cell.Value == null || string.IsNullOrWhiteSpace(cell.Value.ToString()))
+						cell.Value = "-";
+
+			// 9️⃣ Eventos de pintado (evitar duplicados)
+			dgv_evaluaciones.Paint -= dgv_evaluaciones_Paint;
+			dgv_evaluaciones.Paint += dgv_evaluaciones_Paint;
+
+			dgv_evaluaciones.CellPainting -= dgv_evaluaciones_CellPainting;
+			dgv_evaluaciones.CellPainting += dgv_evaluaciones_CellPainting;
+
+			// 🔟 Totales
+
+
+			// ✅ Transponer ANTES de asignar al DataGridView
+	
+			// 🔹 1. Obtener totales y transponerlo
 			var tablaTotales = controlAsistenciasLogica.ObtenerTotalesEvaluaciones(CursadaId.Value);
-			dgv_totales.DataSource = tablaTotales;
+			var tablaTranspuesta = TransponerTotales(tablaTotales);
+			dgv_totales.DataSource = tablaTranspuesta;
+
+			// 🔹 2. Estilos generales del DataGridView
+			dgv_totales.EnableHeadersVisualStyles = false;
+			dgv_totales.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(2, 28, 71);
+			dgv_totales.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+			dgv_totales.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+			dgv_totales.ColumnHeadersHeight = 40;
+			dgv_totales.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+
+			// 🔹 3. Pintar la PRIMERA COLUMNA ("Indicador") como si fuera encabezado
+			DataGridViewColumn firstCol = dgv_totales.Columns[0];
+			firstCol.DefaultCellStyle.BackColor = Color.FromArgb(2, 28, 71);
+			firstCol.DefaultCellStyle.ForeColor = Color.White;
+			firstCol.DefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+			firstCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+
+			dgv_totales.CellPainting -= dgv_totales_CellPainting;
+			dgv_totales.CellPainting += dgv_totales_CellPainting;
+
+			// Opcional: fijarla para que no se mueva cuando haces scroll
+			firstCol.Frozen = true;
+
+			// 🔹 4. Ajustar tamaño automático de columnas
+			foreach (DataGridViewColumn col in dgv_totales.Columns)
+			{
+				col.AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+			}
+
+			// 🔹 5. Opcional → evitar que se pueda seleccionar esa columna azul
+			firstCol.ReadOnly = true;
+
+
 		}
 
+		// =====================================================
+		// 🔹 DIBUJAR AGRUPACIÓN DE CUATRIMESTRES (SIN DUPLICAR TEXTO)
+		// =====================================================
+		private void dgv_evaluaciones_Paint(object sender, PaintEventArgs e)
+		{
+			var grupos = new List<(string Titulo, string[] Columnas)>
+			{
+				("1° CUATRIMESTRE", new[] { "REC1", "INF1" }),
+				("2° CUATRIMESTRE", new[] { "REC2", "INF2" }),
+				("NOTA DE CURSADA", new[] { "APromocion", "AFinal", "Recursa" })
+			};
+
+			int headerHeight = dgv_evaluaciones.ColumnHeadersHeight / 2;
+			using (SolidBrush backColor = new SolidBrush(Color.FromArgb(2, 28, 71)))
+			using (Pen pen = new Pen(Color.Black))
+			using (StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+			{
+				foreach (var grupo in grupos)
+				{
+					var cols = dgv_evaluaciones.Columns
+						.Cast<DataGridViewColumn>()
+						.Where(c => grupo.Columnas.Contains(c.Name))
+						.OrderBy(c => c.DisplayIndex)
+						.ToList();
+
+					if (cols.Count == 0) continue;
+
+					Rectangle rect = new Rectangle(
+						dgv_evaluaciones.GetColumnDisplayRectangle(cols.First().Index, true).Left,
+						0,
+						dgv_evaluaciones.GetColumnDisplayRectangle(cols.Last().Index, true).Right -
+						dgv_evaluaciones.GetColumnDisplayRectangle(cols.First().Index, true).Left,
+						headerHeight
+					);
+
+					e.Graphics.FillRectangle(backColor, rect);
+					e.Graphics.DrawRectangle(pen, rect);
+					e.Graphics.DrawString(grupo.Titulo, new Font("Segoe UI", 9, FontStyle.Bold), Brushes.White, rect, sf);
+				}
+			}
+
+			// Línea que divide grupo de headers individuales
+			e.Graphics.DrawLine(Pens.Black, 0, headerHeight, dgv_evaluaciones.Width, headerHeight);
+		}
+
+		// =====================================================
+		// 🔹 ROTAR SOLO ENCABEZADO DE REC1, INF1, REC2, INF2 – SIN SUPERPONER
+		// =====================================================
+		private void dgv_evaluaciones_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+		{
+			if (e.RowIndex == -1 && e.ColumnIndex >= 0)
+			{
+				string[] rotar = { "REC1", "INF1", "REC2", "INF2" };
+				string col = dgv_evaluaciones.Columns[e.ColumnIndex].Name;
+
+				if (rotar.Contains(col))
+				{
+					e.PaintBackground(e.CellBounds, true);
+
+					// Bajamos el texto para que se vea bien centrado hacia abajo
+					e.Graphics.TranslateTransform(e.CellBounds.Left + 5, e.CellBounds.Bottom - 5);
+					e.Graphics.RotateTransform(-90);
+					e.Graphics.DrawString(col, new Font("Segoe UI", 9, FontStyle.Bold), Brushes.White, 0, 0);
+					e.Graphics.ResetTransform();
+
+					e.Handled = true;
+				}
+			}
+		}
+
+		private void dgv_totales_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+		{
+			// Si estoy en una celda de datos (fila >= 0) y primera columna (col = 0)
+			if (e.RowIndex >= 0 && e.ColumnIndex == 0)
+			{
+				e.PaintBackground(e.CellBounds, true);
+
+				// Fondo igual al header superior
+				using (Brush backColor = new SolidBrush(Color.FromArgb(2, 28, 71)))
+				{
+					e.Graphics.FillRectangle(backColor, e.CellBounds);
+				}
+
+				// Borde
+				using (Pen pen = new Pen(Color.Black))
+				{
+					e.Graphics.DrawRectangle(pen, e.CellBounds);
+				}
+
+				// Texto blanco centrado
+				TextRenderer.DrawText(
+					e.Graphics,
+					e.FormattedValue?.ToString(),
+					new Font("Segoe UI", 9, FontStyle.Bold),
+					e.CellBounds,
+					Color.White,
+					TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
+				);
+
+				e.Handled = true; // Ya lo pintamos
+			}
+		}
+
+
+		public static DataTable TransponerTotales(DataTable tablaOriginal)
+		{
+			DataTable tablaTranspuesta = new DataTable();
+
+			// 📌 Primera columna de filas: "Indicador" (TotalConNota, Aprobados, etc.)
+			tablaTranspuesta.Columns.Add("Indicador");
+
+			// 📌 Agregar como columnas los valores de "Examen" (TP1, REC1, INF1...)
+			foreach (DataRow row in tablaOriginal.Rows)
+				tablaTranspuesta.Columns.Add(row["Examen"].ToString());
+
+			// 📌 Lista de indicadores fijos (las filas originales que ahora serán columnas)
+			string[] indicadores = { "TotalConNota", "CantidadAprobados", "CantidadDesaprobados", "CantidadAusentes", "Promedio" };
+
+			foreach (string indicador in indicadores)
+			{
+				DataRow nuevaFila = tablaTranspuesta.NewRow();
+				nuevaFila["Indicador"] = indicador;
+
+				foreach (DataRow row in tablaOriginal.Rows)
+				{
+					string examen = row["Examen"].ToString();
+					nuevaFila[examen] = row[indicador];
+				}
+
+				tablaTranspuesta.Rows.Add(nuevaFila);
+			}
+
+			return tablaTranspuesta;
+		}
 
 		// =====================================================
 		// 🔹 FORMATEO DE GRILLA

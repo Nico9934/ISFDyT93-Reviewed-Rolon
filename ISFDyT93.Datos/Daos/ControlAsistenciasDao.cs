@@ -56,93 +56,79 @@ namespace ISFDyT93.Datos.Daos
 		public DataTable ObtenerEvaluacionesCursada(int cursadaId)
 		{
 			string query = $@"
-        DECLARE @cols NVARCHAR(MAX) = '';
+			DECLARE @cols NVARCHAR(MAX) = '';
 
-        -- 1️⃣ Generar dinámicamente las columnas de evaluaciones (según existan notas cargadas)
-        SELECT @cols = STRING_AGG(
-            'MAX(CASE WHEN RACD.TipoEvaluacionId = ' 
-            + CAST(TE.TipoEvaluacionId AS VARCHAR) 
-            + ' THEN RACD.Nota END) AS [' + TE.Codigo + ']', 
-            ', '
-        ) WITHIN GROUP (ORDER BY TE.Secuencia)
-        FROM (
-            SELECT DISTINCT TE.TipoEvaluacionId, TE.Codigo, TE.Secuencia
-            FROM RegistroAcademicoCursadaDetalle RACD
-            INNER JOIN RegistroAcademicoCursada RAC 
-                ON RACD.RegistroAcademicoCursadaId = RAC.RegistroAcademicoCursadaId
-            INNER JOIN CursadaAlumnoCarreras CAC 
-                ON RAC.CursadaAlumnoCarreraId = CAC.CursadaAlumnoCarreraId
-            INNER JOIN TiposEvaluacionCursada TE 
-                ON RACD.TipoEvaluacionId = TE.TipoEvaluacionId
-            WHERE CAC.CursadaId = {cursadaId}
-        ) AS TE;
-
-        -- 2️⃣ Query final dinámica
-        DECLARE @sql NVARCHAR(MAX) = '
-        SELECT
-            ROW_NUMBER() OVER (ORDER BY AL.Apellido, AL.Nombre) AS Nro,
-            AL.NumeroDocumento AS DNI,
-            AL.Apellido + '', '' + AL.Nombre AS Alumno,
-            ' + @cols + '
-        FROM RegistroAcademicoCursada RAC
-        INNER JOIN CursadaAlumnoCarreras CAC 
-            ON RAC.CursadaAlumnoCarreraId = CAC.CursadaAlumnoCarreraId
-        INNER JOIN AlumnosCarreras AC 
-            ON CAC.AlumnoCarreraId = AC.AlumnoCarreraId
-        INNER JOIN Alumnos AL 
-            ON AC.AlumnoId = AL.AlumnoId
-        LEFT JOIN RegistroAcademicoCursadaDetalle RACD 
-            ON RAC.RegistroAcademicoCursadaId = RACD.RegistroAcademicoCursadaId
-        LEFT JOIN TiposEvaluacionCursada TE 
-            ON RACD.TipoEvaluacionId = TE.TipoEvaluacionId
-        WHERE CAC.CursadaId = {cursadaId}
-        GROUP BY AL.NumeroDocumento, AL.Apellido, AL.Nombre
-        ORDER BY AL.Apellido, AL.Nombre;
-        ';
-
-        EXEC sp_executesql @sql;
-    ";
-
-			return this.Conexion.ObtenerRegistros(query);
-		}
-
-
-		public DataTable ObtenerTotalesEvaluaciones(int cursadaId)
-		{
-			string query = $@"
-               SELECT 
-					CASE 
-						WHEN TE.Codigo = 'TP1'  THEN 'Trabajo Práctico 1'
-						WHEN TE.Codigo = 'TP2'  THEN 'Trabajo Práctico 2'
-						WHEN TE.Codigo = 'PAR'  THEN 'Parcial 1'
-						WHEN TE.Codigo = 'PAR2' THEN 'Parcial 2'
-						WHEN TE.Codigo = 'REC1' THEN 'Recuperatorio 1'
-						WHEN TE.Codigo = 'REC2' THEN 'Recuperatorio 2'
-						WHEN TE.Codigo = 'INF1' THEN 'Informe 1'
-						WHEN TE.Codigo = 'INF2' THEN 'Informe 2'
-						WHEN TE.Codigo = 'FIN'  THEN 'Final'
-						ELSE TE.Codigo
-					END AS Examen,
-					COUNT(RACD.Nota) AS TotalConNota,
-					SUM(CASE WHEN RACD.Nota >= 7 THEN 1 ELSE 0 END) AS Aprobados,
-					SUM(CASE WHEN RACD.Nota < 7 THEN 1 ELSE 0 END) AS Desaprobados,
-					(SELECT COUNT(*) 
-					 FROM RegistroAcademicoCursada 
-					 WHERE CursadaAlumnoCarreraId IN (
-						SELECT CursadaAlumnoCarreraId FROM CursadaAlumnoCarreras WHERE CursadaId = {cursadaId}
-					 ) ) - COUNT(RACD.Nota) AS Ausentes,
-					AVG(CAST(RACD.Nota AS DECIMAL(10,2))) AS Promedio
+			SELECT @cols = STRING_AGG(
+				'MAX(CASE WHEN RACD.TipoEvaluacionId = ' + CAST(Sub.TipoEvaluacionId AS VARCHAR) +
+				' THEN RACD.Nota END) AS [' + Sub.Codigo + ']', 
+				', '
+			) WITHIN GROUP (ORDER BY
+				CASE 
+					WHEN Sub.Codigo IN ('TP1', 'PAR', 'REC1', 'INF1') THEN 1
+					WHEN Sub.Codigo IN ('TP2', 'REC2', 'INF2') THEN 2
+					ELSE 3
+				END,
+				Sub.Secuencia
+			)
+			FROM (
+				SELECT DISTINCT TE.TipoEvaluacionId, TE.Codigo, TE.Secuencia
 				FROM RegistroAcademicoCursadaDetalle RACD
 				INNER JOIN RegistroAcademicoCursada RAC ON RACD.RegistroAcademicoCursadaId = RAC.RegistroAcademicoCursadaId
 				INNER JOIN CursadaAlumnoCarreras CAC ON RAC.CursadaAlumnoCarreraId = CAC.CursadaAlumnoCarreraId
 				INNER JOIN TiposEvaluacionCursada TE ON RACD.TipoEvaluacionId = TE.TipoEvaluacionId
 				WHERE CAC.CursadaId = {cursadaId}
-				GROUP BY TE.Codigo
-				ORDER BY MIN(TE.Secuencia);
-            ";
+			) AS Sub;
+
+			IF (@cols IS NULL OR @cols = '')
+				SET @cols = 'NULL AS [SinNotas]';
+
+			DECLARE @sql NVARCHAR(MAX) = '
+			SELECT
+				ROW_NUMBER() OVER (ORDER BY AL.Apellido, AL.Nombre) AS Nro,
+				AL.NumeroDocumento AS DNI,
+				AL.Apellido + '', '' + AL.Nombre AS Alumno,
+				CAC.Estado AS Condición,
+				' + @cols + ',
+				CAC.APromocion,
+				CAC.AFinal,
+				CAC.Recursa,
+				CAC.Observaciones
+			FROM RegistroAcademicoCursada RAC
+			INNER JOIN CursadaAlumnoCarreras CAC ON RAC.CursadaAlumnoCarreraId = CAC.CursadaAlumnoCarreraId
+			INNER JOIN AlumnosCarreras AC ON CAC.AlumnoCarreraId = AC.AlumnoCarreraId
+			INNER JOIN Alumnos AL ON AC.AlumnoId = AL.AlumnoId
+			LEFT JOIN RegistroAcademicoCursadaDetalle RACD ON RAC.RegistroAcademicoCursadaId = RACD.RegistroAcademicoCursadaId
+			WHERE CAC.CursadaId = {cursadaId}
+			GROUP BY AL.NumeroDocumento, AL.Apellido, AL.Nombre, CAC.Estado, CAC.APromocion, CAC.AFinal, CAC.Recursa, CAC.Observaciones
+			ORDER BY AL.Apellido, AL.Nombre;
+			';
+
+			EXEC sp_executesql @sql;
+			";
 
 			return this.Conexion.ObtenerRegistros(query);
 		}
+
+		public DataTable ObtenerTotalesEvaluaciones(int cursadaId)
+		{
+			string query = $@"
+				SELECT 
+					TE.Codigo AS Examen,
+					I.CantidadAprobados + I.CantidadDesaprobados AS TotalConNota,
+					I.CantidadAprobados,
+					I.CantidadDesaprobados,
+					I.CantidadAusentes,
+					I.Promedio
+				FROM InstanciaExamenCursada I
+				INNER JOIN TiposEvaluacionCursada TE
+					ON I.TipoEvaluacionId = TE.TipoEvaluacionId
+				WHERE I.CursadaId = {cursadaId}
+				ORDER BY I.Secuencia;
+			";
+
+			return this.Conexion.ObtenerRegistros(query);
+		}
+
 
 		/// <summary>
 		/// Carga los cursos correspondientes a una carrera y un año.
